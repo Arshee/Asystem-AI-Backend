@@ -36,6 +36,9 @@ app.post("/api/ai", async (req, res) => {
     res.status(500).json({ error: "Błąd po stronie serwera AI" });
   }
 });
+app.get("/api/test", (req, res) => {
+  res.json({ status: "ok", message: "Backend działa poprawnie 🚀" });
+});
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`✅ Server działa na porcie ${PORT}`));
