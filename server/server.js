@@ -5,6 +5,19 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 
 dotenv.config();
+// tymczasowy debug — NIE wypisuj klucza w całości w publiczne logi
+console.log("🧪 DEBUG: API_KEY present:", !!process.env.API_KEY);
+console.log("🧪 DEBUG: OPENAI_API_KEY present:", !!process.env.OPENAI_API_KEY);
+
+// pokaż 4 pierwsze i 4 ostatnie znaki (maskowane) jeśli istnieje
+if (process.env.API_KEY) {
+  const v = process.env.API_KEY;
+  console.log("🧪 DEBUG: API_KEY preview:", v.slice(0,4) + "..." + v.slice(-4));
+}
+if (process.env.OPENAI_API_KEY) {
+  const v = process.env.OPENAI_API_KEY;
+  console.log("🧪 DEBUG: OPENAI_API_KEY preview:", v.slice(0,4) + "..." + v.slice(-4));
+}
 
 const app = express();
 app.use(cors());
