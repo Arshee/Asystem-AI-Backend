@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -26,8 +27,33 @@ const openai = new OpenAI({
   apiKey: process.env.API_KEY || process.env.OPENAI_API_KEY,
 });
 
-// ✅ Główna trasa AI (frontend wysyła prompt)
-app.post("/api/ai", async (req, res) => {
+// 🔐 PROSTE LOGOWANIE
+let activeTokens = new Set();
+
+app.post("/api/login", (req, res) => {
+  const { password } = req.body;
+  if (password === process.env.ADMIN_PASSWORD) {
+    const token = crypto.randomBytes(32).toString("hex");
+    activeTokens.add(token);
+    console.log("✅ Zalogowano, wygenerowano token:", token.slice(0, 8) + "...");
+    res.json({ success: true, token });
+  } else {
+    console.warn("❌ Nieudane logowanie z hasłem:", password);
+    res.status(401).json({ success: false, message: "Niepoprawne hasło" });
+  }
+});
+
+// Middleware sprawdzający autoryzację
+function requireAuth(req, res, next) {
+  const token = req.headers["authorization"];
+  if (!token || !activeTokens.has(token)) {
+    return res.status(403).json({ error: "Brak dostępu. Zaloguj się." });
+  }
+  next();
+}
+
+// ✅ Główna trasa AI (wymaga logowania)
+app.post("/api/ai", requireAuth, async (req, res) => {
   const { prompt } = req.body;
 
   try {
