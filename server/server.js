@@ -7,28 +7,40 @@ import crypto from "crypto";
 
 dotenv.config();
 
-// 🧪 Debug — pokazuje, czy klucze są widoczne
-console.log("🧪 DEBUG: API_KEY present:", !!process.env.API_KEY);
-console.log("🧪 DEBUG: OPENAI_API_KEY present:", !!process.env.OPENAI_API_KEY);
-
 const app = express();
 app.use(express.json());
 
-// ✅ CORS — pozwól tylko Twojemu frontendowi
-app.use(cors({
-  origin: ["http://localhost:5173", "https://asystem-ai-frontend.onrender.com"],
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+/**
+ * ✅ CORS — poprawiona domena frontendu
+ * UWAGA: Twoja domena frontendu to:
+ * https://asystent-ai-xp0a.onrender.com
+ */
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://asystent-ai-xp0a.onrender.com" // 👈 poprawiony frontend
+    ],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+// ⚠️ Wymagane dla RENDER – obsługa preflight
+app.options("*", cors());
 
 // 🔑 OpenAI konfiguracja
 const openai = new OpenAI({
   apiKey: process.env.API_KEY || process.env.OPENAI_API_KEY,
 });
 
-// 🔐 PROSTE LOGOWANIE — generowanie tokena po haśle
+// 🔐 PROSTE LOGOWANIE — tokeny przechowywane w pamięci serwera
 let activeTokens = new Set();
 
+/**
+ * 🔓 LOGIN ENDPOINT
+ * Wywoływany w front-endzie podczas logowania
+ */
 app.post("/api/login", (req, res) => {
   const { password } = req.body;
   const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "tajnehaslo123";
@@ -36,25 +48,39 @@ app.post("/api/login", (req, res) => {
   if (password === ADMIN_PASSWORD) {
     const token = crypto.randomBytes(32).toString("hex");
     activeTokens.add(token);
-    console.log("✅ Zalogowano — token:", token.slice(0, 8) + "...");
-    res.json({ success: true, token });
-  } else {
-    console.warn("❌ Nieudane logowanie (błędne hasło)");
-    res.status(401).json({ success: false, message: "Niepoprawne hasło" });
+
+    console.log("✅ Zalogowano — token:", token.slice(0, 10) + "...");
+
+    return res.json({
+      success: true,
+      token,
+    });
   }
+
+  console.warn("❌ Nieudane logowanie (błędne hasło)");
+  return res.status(401).json({
+    success: false,
+    message: "Niepoprawne hasło",
+  });
 });
 
-// 🛡️ Middleware: sprawdzanie tokena przy każdej prośbie AI
+/**
+ * 🛡️ MIDDLEWARE — sprawdzanie tokena
+ */
 function requireAuth(req, res, next) {
   const token = req.headers["authorization"];
+
   if (!token || !activeTokens.has(token)) {
     console.warn("🚫 Brak autoryzacji lub token nieprawidłowy");
-    return res.status(403).json({ error: "Brak dostępu. Zaloguj się." });
+    return res.status(403).json({ error: "Brak dostępu. Zaloguj się ponownie." });
   }
+
   next();
 }
 
-// ✅ Główna trasa AI — wymaga logowania
+/**
+ * 🤖 GŁÓWNY ENDPOINT AI — wymaga tokena
+ */
 app.post("/api/ai", requireAuth, async (req, res) => {
   const { prompt } = req.body;
 
@@ -65,7 +91,7 @@ app.post("/api/ai", requireAuth, async (req, res) => {
         {
           role: "system",
           content:
-            "Zwracaj WYŁĄCZNIE dane w poprawnym formacie JSON. Nie dodawaj żadnych opisów, komentarzy ani tekstów poza JSON.",
+            "Zwracaj tylko poprawny JSON bez komentarzy, opisów i dodatkowego tekstu.",
         },
         { role: "user", content: prompt },
       ],
@@ -75,27 +101,33 @@ app.post("/api/ai", requireAuth, async (req, res) => {
 
     let responseText = completion.choices[0]?.message?.content?.trim();
 
-    // 🔍 Automatyczne wyłuskanie JSON-a
+    // 🧹 Automatyczne wyciągnięcie JSON
     const jsonMatch = responseText?.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
     if (jsonMatch) responseText = jsonMatch[0];
 
-    res.json({ response: responseText });
-  } catch (error) {
-    console.error("❌ Błąd OpenAI:", error);
-    res.status(500).json({ error: "Błąd po stronie serwera AI" });
+    return res.json({ response: responseText });
+  } catch (err) {
+    console.error("❌ Błąd OpenAI:", err);
+    return res.status(500).json({ error: "Błąd po stronie serwera AI." });
   }
 });
 
-// 🔹 Testowy endpoint
+/**
+ * 🔍 Endpoint testowy
+ */
 app.get("/api/test", (req, res) => {
   res.send("✅ Backend AI działa poprawnie!");
 });
 
-// 🔹 Strona główna Render
+/**
+ * 🌐 Endpoint główny
+ */
 app.get("/", (req, res) => {
-  res.send("🚀 Asystent AI backend działa! Sprawdź /api/test lub /api/ai");
+  res.send("🚀 Asystent AI backend działa! Sprawdź /api/test lub /api/login");
 });
 
-// 🧩 Uruchomienie serwera
+/**
+ * 🚀 Start serwera
+ */
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`✅ Server działa na porcie ${PORT}`));
