@@ -38,18 +38,24 @@ try {
 const app = express();
 app.use(express.json());
 
-// CORS — dodaj tutaj swoją domenę frontendu
+/**
+ * ✅ CORS — poprawiona domena frontendu
+ * UWAGA: Twoja domena frontendu to:
+ * https://asystent-ai-xp0a.onrender.com
+ */
 app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://asystent-ai-xp0a.onrender.com",
-      "https://asystem-ai-frontend.onrender.com",
+      "https://asystent-ai-xp0a.onrender.com" // 👈 poprawiony frontend
+
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// ⚠️ Wymagane dla RENDER – obsługa preflight
 app.options("*", cors());
 
 // Proste tokenowe logowanie
