@@ -3,8 +3,4 @@ services:
     name: asystent-ai-backend
     env: node
     plan: starter
-    buildCommand: "npm ci && npm run build"
-    startCommand: "node dist/index.js"
-    envVars:
-      - key: PORT
-        value: "3000"
+    startCommand: "node server.js"
