@@ -3,19 +3,8 @@ services:
     name: asystent-ai-backend
     env: node
     plan: starter
-    # ZMIANA: Dodajemy 'npm run build' po 'npm ci'
     buildCommand: "npm ci && npm run build"
-    startCommand: "npm start"
+    startCommand: "node dist/index.js"
     envVars:
       - key: PORT
         value: "3000"
-      - key: APP_URL
-        fromService:
-          name: asystent-ai-backend
-  - type: worker
-    name: asystent-ai-worker
-    env: node
-    plan: starter
-    # ZMIANA: Dodajemy 'npm run build' do buildCommand dla worker-a
-    buildCommand: "npm ci && npm run build"
-    startCommand: "npm run worker"
