@@ -2,7 +2,7 @@
   "name": "ai-publication-backend",
   "version": "1.0.0",
   "description": "Backend service for AI Publication Assistant",
- "main": "dist/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
