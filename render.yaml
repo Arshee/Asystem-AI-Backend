@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: Asystent-AI-Backend
+    name: asystem-ai-backend
     env: node
     plan: starter
     buildCommand: "npm ci"
