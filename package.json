@@ -1,5 +1,5 @@
 {
-  "name": "asystent-ai-backend",
+  "name": "Asystem-AI-Backend",
   "version": "1.0.0",
   "main": "server/server.js",
   "scripts": {
