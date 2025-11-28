@@ -55,12 +55,11 @@ app.post("/api/login", (req, res) => {
   const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "tajnehaslo123";
 
   if (password === ADMIN_PASSWORD) {
-    const token = crypto.randomBytes(32).toString("hex");
-    active++;
-    activeTokens.add(token);
-    console.log("🔑 Login OK:", token.slice(0, 8) + "...");
-    return res.json({ success: true, token });
-  }
+  const token = crypto.randomBytes(32).toString("hex");
+  activeTokens.add(token);
+  console.log("🔑 Login OK:", token.slice(0, 8) + "...");
+  return res.json({ success: true, token });
+}
 
   return res.status(401).json({ success: false, message: "Niepoprawne hasło" });
 });
