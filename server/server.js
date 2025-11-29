@@ -2,43 +2,32 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import crypto from "crypto";
-import multer from "multer"; // ✅ MULTER
+import multer from "multer";
 
 dotenv.config();
 
 /* -------------------------------------------------
-      ♊ GEMINI KLIENT (opcjonalnie)
+      🚀 INITIALIZACJA APP — MUSI BYĆ NA GÓRZE
+-------------------------------------------------- */
+const app = express();
+app.use(express.json());
+
+/* -------------------------------------------------
+      ♊ GEMINI KLIENT
 -------------------------------------------------- */
 let googleClient = null;
 try {
   const { GoogleGenAI } = await import("@google/genai");
 
-  if (process.env.GOOGLE_API_KEY) {
-    googleClient = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+  if (process.env.API_KEY) {
+    googleClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
     console.log("🟢 Gemini client initialized");
+  } else {
+    console.log("⚠️ Brak API_KEY — Gemini nie zadziała");
   }
 } catch (e) {
-  console.log("ℹ️ Gemini not available");
+  console.log("⚠️ Gemini lib not available");
 }
-
-/* -------------------------------------------------
-      🔄 OpenAI (fallback jeśli Gemini brak)
--------------------------------------------------- */
-let OpenAIClient = null;
-try {
-  const OpenAI = (await import("openai")).default;
-  if (process.env.API_KEY || process.env.OPENAI_API_KEY) {
-    OpenAIClient = new OpenAI({
-      apiKey: process.env.API_KEY || process.env.OPENAI_API_KEY,
-    });
-    console.log("🟣 OpenAI client initialized");
-  }
-} catch (e) {
-  console.log("ℹ️ OpenAI not available");
-}
-
-const app = express();
-app.use(express.json());
 
 /* -------------------------------------------------
       🌐 CORS
@@ -47,7 +36,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://asystent-ai-xp0a.onrender.com", // TWÓJ FRONTEND
+      "https://asystent-ai-xp0a.onrender.com",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -57,7 +46,7 @@ app.use(
 app.options("*", cors());
 
 /* -------------------------------------------------
-      🔐 LOGOWANIE TOKENOWE
+      🔐 LOGOWANIE
 -------------------------------------------------- */
 let activeTokens = new Set();
 
@@ -66,11 +55,11 @@ app.post("/api/login", (req, res) => {
   const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "tajnehaslo123";
 
   if (password === ADMIN_PASSWORD) {
-    const token = crypto.randomBytes(32).toString("hex");
-    activeTokens.add(token);
-    console.log("🔓 Login OK:", token.slice(0, 8) + "...");
-    return res.json({ success: true, token });
-  }
+  const token = crypto.randomBytes(32).toString("hex");
+  activeTokens.add(token);
+  console.log("🔑 Login OK:", token.slice(0, 8) + "...");
+  return res.json({ success: true, token });
+}
 
   return res.status(401).json({ success: false, message: "Niepoprawne hasło" });
 });
@@ -84,79 +73,55 @@ function requireAuth(req, res, next) {
 }
 
 /* -------------------------------------------------
-      🤖 FUNKCJA WSPÓLNA DO PYTAŃ (Gemini → OpenAI)
+      🤖 FUNKCJA AI — tylko GEMINI
 -------------------------------------------------- */
-async function askModel(prompt, options = {}) {
-  // ➤ Priorytet: GEMINI
-  if (googleClient) {
-    try {
-      const resp = await googleClient.models.generateContent({
-        model: process.env.GOOGLE_MODEL || "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          temperature: 0.8,
-          maxOutputTokens: 1200,
-          ...(options.config || {}),
-        },
-      });
-
-      const text =
-        resp.text ||
-        resp.candidates?.[0]?.content?.parts?.map((x) => x.text).join(" ") ||
-        "";
-
-      return text;
-    } catch (err) {
-      console.error("Gemini error:", err);
-      throw err;
-    }
+async function askModel(prompt) {
+  if (!googleClient) {
+    throw new Error("Brak API_KEY → Gemini nie działa.");
   }
 
-  // ➤ Fallback: OPENAI
-  if (OpenAIClient) {
-    const completion = await OpenAIClient.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "Zwracaj tylko poprawny JSON." },
-        { role: "user", content: prompt },
-      ],
-    });
+  const resp = await googleClient.models.generateContent({
+    model: process.env.GOOGLE_MODEL || "gemini-2.5-flash",
+    contents: prompt,
+    config: { temperature: 0.8, maxOutputTokens: 1500 }
+  });
 
-    return completion.choices[0]?.message?.content || "";
-  }
+  const text =
+    resp.text ||
+    resp.candidates?.[0]?.content?.parts?.map((p) => p.text).join(" ") ||
+    "";
 
-  throw new Error("Brak dostępnego modelu AI.");
+  return text;
 }
 
 /* -------------------------------------------------
-      📡 ENDPOINT JSON (AI)
+      📡 API JSON
 -------------------------------------------------- */
 app.post("/api/ai", requireAuth, async (req, res) => {
   const { prompt } = req.body;
-  if (!prompt) return res.status(400).json({ error: "Brak prompt" });
+
+  if (!prompt)
+    return res.status(400).json({ error: "Brak prompt" });
 
   try {
-    const text = await askModel(prompt);
+    const result = await askModel(
+      "Zwracaj tylko poprawny JSON.\n" + prompt
+    );
 
-    // Wyciągnij JSON
-    const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    return res.json({ response: match ? match[0] : text });
+    const match = result.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+
+    return res.json({ response: match ? match[0] : result });
   } catch (err) {
-    console.error("AI error:", err);
-    return res.status(500).json({ error: "Błąd AI" });
+    console.error("AI ERROR:", err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
 /* -------------------------------------------------
-      🖼️ MULTER do uploadu miniatur
+      🖼️ MINIATURY
 -------------------------------------------------- */
-const upload = multer({
-  storage: multer.memoryStorage(),
-});
+const upload = multer({ storage: multer.memoryStorage() });
 
-/* -------------------------------------------------
-      🎨 GENEROWANIE MINIATUR
--------------------------------------------------- */
 app.post(
   "/api/generate-thumbnails",
   requireAuth,
@@ -164,79 +129,33 @@ app.post(
   async (req, res) => {
     try {
       if (!req.file)
-        return res.status(400).json({ error: "Brakuje pola frame (plik)" });
+        return res.status(400).json({ error: "Brakuje pliku frame" });
 
-      const {
-        title = "",
-        overlayText = "",
-        orientation = "landscape",
-      } = req.body;
+      const imgb64 = req.file.buffer.toString("base64");
 
-      // Jeśli Gemini obsługuje generowanie obrazów
-      if (googleClient && process.env.GOOGLE_IMAGE_MODEL) {
-        try {
-          const base64 = req.file.buffer.toString("base64");
-
-          const result = await googleClient.models.generateContent({
-            model: process.env.GOOGLE_IMAGE_MODEL,
-            contents: {
-              parts: [
-                { inlineData: { data: base64, mimeType: req.file.mimetype } },
-                {
-                  text: `Stwórz 3 miniatury do filmu "${title}" z tekstem "${overlayText}". Orientacja: ${orientation}.`,
-                },
-              ],
-            },
-            config: {
-              responseModalities: ["image"],
-            },
-          });
-
-          const thumbs = [];
-          const cands = result.candidates || [];
-
-          for (const c of cands) {
-            const parts = c.content?.parts || [];
-            let img = null;
-            let desc = "Miniatura";
-
-            for (const p of parts) {
-              if (p.inlineData?.data) img = p.inlineData.data;
-              if (p.text) desc = p.text;
-            }
-
-            if (img) thumbs.push({ description: desc, imageData: img });
-          }
-
-          return res.json({ thumbnails: thumbs });
-        } catch (err) {
-          console.error("Gemini IMG error:", err);
-          return res.status(500).json({ error: "Gemini image error" });
-        }
-      }
-
-      // Fallback — tylko opisy
+      // Brak wsparcia dla generowania obrazów → fallback
       return res.json({
         thumbnails: [
           { description: "Dynamiczna miniatura", imageData: null },
           { description: "Minimalistyczna miniatura", imageData: null },
-          { description: "Jaskrawa social miniatura", imageData: null },
-        ],
+          { description: "Kontrastowa miniatura", imageData: null }
+        ]
       });
-    } catch (err) {
-      console.error("Miniature error:", err);
-      return res.status(500).json({ error: "Błąd generowania miniatur" });
+    } catch (e) {
+      console.error("Thumbnail ERR:", e);
+      return res.status(500).json({ error: "Błąd miniatur" });
     }
   }
 );
 
 /* -------------------------------------------------
-      🌍 TESTY / ROOT
+      🌍 ROUTES
 -------------------------------------------------- */
-app.get("/api/test", (req, res) => res.send("OK ✓ Backend działa"));
-app.get("/", (req, res) =>
-  res.send("🚀 Backend działa — sprawdź /api/test lub /api/login")
-);
+app.get("/api/test", (_, res) => res.send("OK ✓"));
+app.get("/", (_, res) => res.send("Backend działa ✓"));
 
+/* -------------------------------------------------
+      🚀 START SERWERA
+-------------------------------------------------- */
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`🔥 Server running on port ${PORT}`));
