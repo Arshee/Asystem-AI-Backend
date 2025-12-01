@@ -52,7 +52,7 @@ let activeTokens = new Set();
 
 app.post("/api/login", (req, res) => {
   const { password } = req.body;
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "tajnehaslo123";
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "a808Lq5Bvv";
 
   if (password === ADMIN_PASSWORD) {
   const token = crypto.randomBytes(32).toString("hex");
